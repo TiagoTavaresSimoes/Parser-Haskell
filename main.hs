@@ -9,20 +9,61 @@ data Inst =
   deriving Show
 type Code = [Inst]
 
+-- define Stack and State types
+type Stack = [Either Integer Bool]
+type State = [(String, Either Integer Bool)]
+
 -- createEmptyStack :: Stack
-createEmptyStack = undefined -- TODO, Uncomment the function signature after defining Stack
+createEmptyStack :: Stack
+createEmptyStack = []
+
+-- Function to convert a stack element (either integer bool) to string
+eitherToStr :: Either Integer Bool -> String
+eitherToStr (Left i) = show i
+eitherToStr (Right b) = show b
+
 
 -- stack2Str :: Stack -> String
-stack2Str = undefined -- TODO, Uncomment all the other function type declarations as you implement them
+stack2Str :: Stack -> String
+stack2Str stack = "[" ++ (intercalate ", " (map eitherToStr stack)) ++ "]"
+  where intercalate sep = foldr (\a b -> a ++ if null b then b else sep ++ b) ""
 
 -- createEmptyState :: State
-createEmptyState = undefined -- TODO, Uncomment the function signature after defining State
+createEmptyState :: State
+createEmptyState = []
+
+
+-- stateElemToStr :: Function to convert a state element (key-value pair) to string
+stateElemToStr :: (String, Either Integer Bool) -> String
+stateElemToStr (key, Left i) = key ++ "=" ++ show i
+stateElemToStr (key, Right b) = key ++ "=" ++ show b
+
 
 -- state2Str :: State -> String
-state2Str = undefined -- TODO
+state2Str :: State -> String
+state2Str state = intercalate "," (map stateElemToStr state)
+  where intercalate sep = foldr (\a b -> a ++ if null b then b else sep ++ b) ""
 
 -- run :: (Code, Stack, State) -> (Code, Stack, State)
-run = undefined -- TODO
+run :: (Code, Stack, State) -> (Code, Stack, State)
+run ([], stack, state) = ([], stack, state)  -- No code to run
+run ((inst:rest), stack, state) = 
+    case inst of
+        Push n -> run (rest, (Left n):stack, state)
+        Add -> -- Implement Add logic
+        Mult -> -- Implement Mult logic
+        Sub -> -- Implement Sub logic
+        Tru -> run (rest, (Right True):stack, state)
+        Fals -> run (rest, (Right False):stack, state)
+        Equ -> -- Implement Equ logic
+        Le -> -- Implement Le logic
+        And -> -- Implement And logic
+        Neg -> -- Implement Neg logic
+        Fetch varName -> -- Implement Fetch logic
+        Store varName -> -- Implement Store logic
+        Noop -> run (rest, stack, state)
+        Branch code1 code2 -> -- Implement Branch logic
+        Loop code1 code2 -> -- Implement Loop logic
 
 -- To help you test your assembler
 testAssembler :: Code -> (String, String)
