@@ -152,6 +152,12 @@ compileStm (Seq2 s1 s2) = compileStm s1 ++ compileStm s2
 compileStm (If2 b s1 s2) = compB b ++ [Branch (compileStm s1) (compileStm s2)]
 compileStm (While2 b s) = [Loop (compB b ++ [Neg]) (compileStm s)]
 
+-- compile :: [Stm] -> Code
+compile :: [Stm] -> Code
+compile [] = []
+compile (stm:stms) = compileStm stm ++ compile stms
+
+
 -- lexer that splits the input string into tokens
 lexer :: String -> [String]
 lexer = words  
