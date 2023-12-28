@@ -50,20 +50,42 @@ run ([], stack, state) = ([], stack, state)  -- No code to run
 run ((inst:rest), stack, state) = 
     case inst of
         Push n -> run (rest, (Left n):stack, state)
-        Add -> -- Implement Add logic
-        Mult -> -- Implement Mult logic
-        Sub -> -- Implement Sub logic
+        Add -> case stack of
+                  (Left a : Left b : xs) -> run (rest, Left (a + b) : xs, state)
+                  _ -> error "Run-time error: Add expects two integers"
+        Mult -> case stack of
+                  (Left a : Left b : xs) -> run (rest, Left (b * a) : xs, state)
+                  _ -> error "Run-time error: Mult expects two integers"
+        Sub -> case stack of
+                  (Left a : Left b : xs) -> run (rest, Left (b - a) : xs, state)
+                  _ -> error "Run-time error: Sub expects two integers"
         Tru -> run (rest, (Right True):stack, state)
         Fals -> run (rest, (Right False):stack, state)
-        Equ -> -- Implement Equ logic
-        Le -> -- Implement Le logic
-        And -> -- Implement And logic
-        Neg -> -- Implement Neg logic
-        Fetch varName -> -- Implement Fetch logic
-        Store varName -> -- Implement Store logic
+        Equ -> case stack of
+                  (Left a : Left b : xs) -> run (rest, Right (a == b) : xs, state)
+                  (Right a : Right b : xs) -> run (rest, Right (a == b) : xs, state)
+                  _ -> error "Run-time error: Equ expects two values of the same type"
+        Le -> case stack of
+                  (Left a : Left b : xs) -> run (rest, Right (b <= a) : xs, state)
+                  _ -> error "Run-time error: Le expects two integers"
+        And -> case stack of
+                  (Right a : Right b : xs) -> run (rest, Right (a && b) : xs, state)
+                  _ -> error "Run-time error: And expects two booleans"
+        Neg -> case stack of
+                  (Right a : xs) -> run (rest, Right (not a) : xs, state)
+                  _ -> error "Run-time error: Neg expects a boolean"
+        Fetch varName -> case lookup varName state of
+                            Just val -> run (rest, val : stack, state)
+                            Nothing -> error ("Variable " ++ varName ++ " not found")
+        Store varName -> case stack of
+                            (v : xs) -> run (rest, xs, (varName, v) : state)
+                            [] -> error "Run-time error: Store expects a value on the stack"
         Noop -> run (rest, stack, state)
-        Branch code1 code2 -> -- Implement Branch logic
-        Loop code1 code2 -> -- Implement Loop logic
+        Branch code1 code2 -> case stack of
+                                (Right True : xs) -> run (code1 ++ rest, xs, state)
+                                (Right False : xs) -> run (code2 ++ rest, xs, state)
+                                _ -> error "Run-time error: Branch expects a boolean on the stack"
+        Loop code1 code2 -> run (code1 ++ [Branch (code2 ++ [Loop code1 code2]) [Noop]] ++ rest, stack, state)
 
 -- To help you test your assembler
 testAssembler :: Code -> (String, String)
