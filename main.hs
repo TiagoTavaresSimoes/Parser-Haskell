@@ -1,4 +1,5 @@
 -- PFL 2023/24 - Haskell practical assignment quickstart
+import Data.Char (isDigit)
 
 -- Part 1
 
@@ -163,16 +164,18 @@ lexer :: String -> [String]
 lexer = words  
 
 parseAexp :: [String] -> (Aexp, [String])
+parseAexp (op:a1:a2:rest)
+    | op `elem` ["+", "-", "*"] = 
+        let (exp1, rest1) = parseAexp [a1]
+            (exp2, rest2) = parseAexp (a2:rest)
+        in case op of
+            "+" -> (Add2 exp1 exp2, rest2)
+            "-" -> (Sub2 exp1 exp2, rest2)
+            "*" -> (Mult2 exp1 exp2, rest2)
 parseAexp (n:rest) 
     | all isDigit n = (Const (read n), rest)  -- Parses an integer constant
     | otherwise     = (Var n, rest)          -- Parses a variable
-parseAexp (op:a1:a2:rest) = case op of
-    "+" -> (Add2 exp1 exp2, rest2)
-    "-" -> (Sub2 exp1 exp2, rest2)
-    "*" -> (Mult2 exp1 exp2, rest2)
-    where
-        (exp1, rest1) = parseAexp [a1]
-        (exp2, rest2) = parseAexp (a2:rest)
+
 
 parseBexp :: [String] -> (Bexp, [String])
 parseBexp ("true":rest)   = (BConst True, rest)
