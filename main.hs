@@ -129,30 +129,36 @@ data Stm =
 
 -- compA :: Aexp -> Code
 compA :: Aexp -> Code
-compA (Const n) = [Push n]
-compA (Var x) = [Fetch x]
-compA (Add a1 a2) = compA a2 ++ compA a1 ++ [Add]
-compA (Sub a1 a2) = compA a2 ++ compA a1 ++ [Sub]
-compA (Mult a1 a2) = compA a2 ++ compA a1 ++ [Mult]
+compA (Const n)    = [Push n]
+compA (Var x)      = [Fetch x]
+compA (Add2 a1 a2) = compA a2 ++ compA a1 ++ [Add]
+compA (Sub2 a1 a2) = compA a2 ++ compA a1 ++ [Sub]
+compA (Mult2 a1 a2) = compA a2 ++ compA a1 ++ [Mult]
+
 
 -- compB :: Bexp -> Code
 compB :: Bexp -> Code
-compB (BoolConst b) = [if b then Tru else Fals]
-compB (Eq a1 a2) = compA a2 ++ compA a1 ++ [Equ]
-compB (Le a1 a2) = compA a2 ++ compA a1 ++ [Le]
-compB (And b1 b2) = compB b2 ++ compB b1 ++ [And]
-compB (Not b) = compB b ++ [Neg]
+compB (BConst b)      = [if b then Tru else Fals]
+compB (Eq2 a1 a2)     = compA a2 ++ compA a1 ++ [Equ]
+compB (Le2 a1 a2)     = compA a2 ++ compA a1 ++ [Le]
+compB (And2 b1 b2)    = compB b2 ++ compB b1 ++ [And]
+compB (Neg2 b)        = compB b ++ [Neg]
+
 
 -- compile :: Program -> Code
-compile :: [Stm] -> Code
-compile [] = []
-compile (s:ss) = compileStm s ++ compile ss
+compileStm :: Stm -> Code
+compileStm (Assign x a)   = compA a ++ [Store x]
+compileStm (Seq2 s1 s2)   = compileStm s1 ++ compileStm s2
+compileStm (If2 b s1 s2)  = compB b ++ [Branch (compileStm s1) (compileStm s2)]
+compileStm (While2 b s)   = [Loop (compB b ++ [Neg]) (compileStm s)]
+
 
 compileStm :: Stm -> Code
 compileStm (Assign x a) = compA a ++ [Store x]
 compileStm (Seq2 s1 s2) = compileStm s1 ++ compileStm s2
 compileStm (If2 b s1 s2) = compB b ++ [Branch (compileStm s1) (compileStm s2)]
 compileStm (While2 b s) = [Loop (compB b ++ [Neg]) (compileStm s)]
+
 
 -- parse :: String -> Program
 parse :: String -> [Stm]
