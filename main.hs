@@ -159,13 +159,67 @@ compileStm (Seq2 s1 s2) = compileStm s1 ++ compileStm s2
 compileStm (If2 b s1 s2) = compB b ++ [Branch (compileStm s1) (compileStm s2)]
 compileStm (While2 b s) = [Loop (compB b ++ [Neg]) (compileStm s)]
 
+-- lexer that splits the input string into tokens
+lexer :: String -> [String]
+lexer = words  
+
+parseAexp :: [String] -> (Aexp, [String])
+parseAexp (n:rest) 
+    | all isDigit n = (Const (read n), rest)  -- Parses an integer constant
+    | otherwise     = (Var n, rest)          -- Parses a variable
+parseAexp (op:a1:a2:rest) = case op of
+    "+" -> (Add2 exp1 exp2, rest2)
+    "-" -> (Sub2 exp1 exp2, rest2)
+    "*" -> (Mult2 exp1 exp2, rest2)
+    where
+        (exp1, rest1) = parseAexp [a1]
+        (exp2, rest2) = parseAexp (a2:rest)
+
+parseBexp :: [String] -> (Bexp, [String])
+parseBexp ("true":rest)   = (BConst True, rest)
+parseBexp ("false":rest)  = (BConst False, rest)
+parseBexp (op:a1:a2:rest) = case op of
+    "==" -> (Eq2 exp1 exp2, rest2)
+    "<=" -> (Le2 exp1 exp2, rest2)
+    "and" -> (And2 bexp1 bexp2, rest2)
+    "not" -> (Neg2 bexp1, rest1)
+    where
+        (exp1, rest1) = parseAexp [a1]
+        (exp2, rest2) = parseAexp (a2:rest)
+        (bexp1, _)    = parseBexp [a1]
+        (bexp2, _)    = parseBexp (a2:rest)
+
+parseStm :: [String] -> (Stm, [String])
+parseStm (";":rest) = parseStm rest
+parseStm (var:":=":rest) = 
+    let (exp, rest') = parseAexp rest
+        rest'' = dropWhile (/=";") rest'
+    in (Assign var exp, rest'')
+parseStm ("if":rest) = 
+    let (bexp, rest1) = parseBexp rest
+        (stm1, rest2) = parseStm rest1
+        (stm2, rest3) = parseStm (dropWhile (/="else") rest2)
+    in (If2 bexp stm1 stm2, drop 1 rest3)
+parseStm ("while":rest) = 
+    let (bexp, rest1) = parseBexp rest
+        (stm, rest2) = parseStm rest1
+    in (While2 bexp stm, rest2)
+
+
+parseStatements :: [String] -> ([Stm], [String])
+parseStatements [] = ([], [])
+parseStatements tokens = 
+    let (stm, restTokens) = parseStm tokens
+        (stms, finalTokens) = parseStatements restTokens
+    in (stm : stms, finalTokens)
+
 
 -- parse :: String -> Program
 parse :: String -> [Stm]
 parse input = 
-  case parseStatements input of
-    Left err -> error (show err)
-    Right stms -> stms
+    let tokens = lexer input
+        (stms, _) = parseStatements tokens
+    in stms
 
 -- To help you test your parser
 testParser :: String -> (String, String)
