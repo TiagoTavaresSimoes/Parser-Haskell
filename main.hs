@@ -1,6 +1,9 @@
 -- PFL 2023/24 - Haskell practical assignment quickstart
 import Data.Char (isDigit)
-
+import Data.List (intercalate, sortBy)
+import Data.Function (on)
+import Data.Ord (comparing)
+import Data.Maybe (fromMaybe)
 -- Part 1
 
 -- Do not modify our definition of Inst and Code
@@ -26,8 +29,7 @@ eitherToStr (Right b) = show b
 
 -- stack2Str :: Stack -> String
 stack2Str :: Stack -> String
-stack2Str stack = "[" ++ (intercalate ", " (map eitherToStr stack)) ++ "]"
-  where intercalate sep = foldr (\a b -> a ++ if null b then b else sep ++ b) ""
+stack2Str stack = "[" ++ intercalate "," (map eitherToStr stack) ++ "]"
 
 -- createEmptyState :: State
 createEmptyState :: State
@@ -40,58 +42,75 @@ stateElemToStr (key, Left i) = key ++ "=" ++ show i
 stateElemToStr (key, Right b) = key ++ "=" ++ show b
 
 
--- state2Str :: State -> String
+--- state2Str :: State -> String
 state2Str :: State -> String
-state2Str state = intercalate "," (map stateElemToStr state)
+state2Str state = intercalate "," (map stateElemToStr (sortBy (comparing fst) state))
   where intercalate sep = foldr (\a b -> a ++ if null b then b else sep ++ b) ""
+        comparing p = compare `on` p
 
 -- run :: (Code, Stack, State) -> (Code, Stack, State)
 run :: (Code, Stack, State) -> (Code, Stack, State)
 run ([], stack, state) = ([], stack, state)  -- No code to run
-run ((inst:rest), stack, state) = 
-    case inst of
-        Push n -> run (rest, (Left n):stack, state)
-        Add -> case stack of
-                  (Left a : Left b : xs) -> run (rest, Left (a + b) : xs, state)
-                  _ -> error "Run-time error: Add expects two integers"
-        Mult -> case stack of
-                  (Left a : Left b : xs) -> run (rest, Left (b * a) : xs, state)
-                  _ -> error "Run-time error: Mult expects two integers"
-        Sub -> case stack of
-                  (Left a : Left b : xs) -> run (rest, Left (b - a) : xs, state)
-                  _ -> error "Run-time error: Sub expects two integers"
-        Tru -> run (rest, (Right True):stack, state)
-        Fals -> run (rest, (Right False):stack, state)
-        Equ -> case stack of
-                  (Left a : Left b : xs) -> run (rest, Right (a == b) : xs, state)
-                  (Right a : Right b : xs) -> run (rest, Right (a == b) : xs, state)
-                  _ -> error "Run-time error: Equ expects two values of the same type"
-        Le -> case stack of
-                  (Left a : Left b : xs) -> run (rest, Right (b <= a) : xs, state)
-                  _ -> error "Run-time error: Le expects two integers"
-        And -> case stack of
-                  (Right a : Right b : xs) -> run (rest, Right (a && b) : xs, state)
-                  _ -> error "Run-time error: And expects two booleans"
-        Neg -> case stack of
-                  (Right a : xs) -> run (rest, Right (not a) : xs, state)
-                  _ -> error "Run-time error: Neg expects a boolean"
-        Fetch varName -> case lookup varName state of
-                            Just val -> run (rest, val : stack, state)
-                            Nothing -> error ("Variable " ++ varName ++ " not found")
-        Store varName -> case stack of
-                            (v : xs) -> run (rest, xs, (varName, v) : state)
-                            [] -> error "Run-time error: Store expects a value on the stack"
-        Noop -> run (rest, stack, state)
-        Branch code1 code2 -> case stack of
-                                (Right True : xs) -> run (code1 ++ rest, xs, state)
-                                (Right False : xs) -> run (code2 ++ rest, xs, state)
-                                _ -> error "Run-time error: Branch expects a boolean on the stack"
-        Loop code1 code2 -> run (code1 ++ [Branch (code2 ++ [Loop code1 code2]) [Noop]] ++ rest, stack, state)
+run (inst:rest, stack, state) =
+  case inst of
+    Push n -> run (rest, Left n : stack, state)
+    Add -> case stack of
+              (Left b : Left a : xs) -> run (rest, Left (a + b) : xs, state)
+              _ -> error "Add expects two integers on top of the stack"
+    Mult -> case stack of
+              (Left b : Left a : xs) -> run (rest, Left (a * b) : xs, state)
+              _ -> error "Mult expects two integers on top of the stack"
+    Sub -> case stack of
+              (Left b : Left a : xs) -> run (rest, Left (a - b) : xs, state)
+              _ -> error "Sub expects two integers on top of the stack"
+    Tru -> run (rest, Right True : stack, state)
+    Fals -> run (rest, Right False : stack, state)
+    Equ -> case stack of
+              (Left b : Left a : xs) -> run (rest, Right (a == b) : xs, state)
+              (Right b : Right a : xs) -> run (rest, Right (a == b) : xs, state)
+              _ -> error "Equ expects two values of the same type on top of the stack"
+    Le -> case stack of
+              (Left b : Left a : xs) -> run (rest, Right (a <= b) : xs, state)
+              _ -> error "Le expects two integers on top of the stack"
+    And -> case stack of
+              (Right b : Right a : xs) -> run (rest, Right (a && b) : xs, state)
+              _ -> error "And expects two booleans on top of the stack"
+    Neg -> case stack of
+              (Right a : xs) -> run (rest, Right (not a) : xs, state)
+              _ -> error "Neg expects a boolean on top of the stack"
+    Fetch varName -> case lookup varName state of
+                        Just val -> run (rest, val : stack, state)
+                        Nothing -> error ("Variable not found: " ++ varName)
+    Store varName -> case stack of
+                        (v : xs) -> run (rest, xs, ((varName, v) : state))
+                        [] -> error "Store expects a value on the stack"
+    Noop -> run (rest, stack, state)
+    Branch code1 code2 -> case stack of
+                              (Right True : xs) -> run (code1 ++ rest, xs, state)
+                              (Right False : xs) -> run (code2 ++ rest, xs, state)
+                              _ -> error "Branch expects a boolean on top of the stack"
+    Loop code1 code2 -> 
+      let loopedCode = code1 ++ [Branch (code2 ++ [Loop code1 code2]) [Noop]]
+      in run (loopedCode ++ rest, stack, state)
 
 -- To help you test your assembler
 testAssembler :: Code -> (String, String)
 testAssembler code = (stack2Str stack, state2Str state)
   where (_,stack,state) = run(code, createEmptyStack, createEmptyState)
+
+main :: IO ()
+main = do
+  putStrLn "Teste 1: "
+  print $ testAssembler [Push 10, Push 4, Push 3, Sub, Mult] == ("-10","")
+  
+  putStrLn "Teste 2: "
+  print $ testAssembler [Fals, Push 3, Tru, Store "var", Store "a", Store "someVar"] == ("","a=3,someVar=False,var=True")
+  
+  putStrLn "Teste 3: "
+  print $ testAssembler [Fals, Store "var", Fetch "var"] == ("False","var=False")
+
+  putStrLn "Teste 4: "
+  print $ testAssembler [Push 1, Push 2, Add] == ("[3]","")
 
 -- Examples:
 -- testAssembler [Push 10,Push 4,Push 3,Sub,Mult] == ("-10","")
