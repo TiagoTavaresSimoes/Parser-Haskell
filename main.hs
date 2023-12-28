@@ -161,7 +161,7 @@ compile (stm:stms) = compileStm stm ++ compile stms
 
 -- lexer that splits the input string into tokens
 lexer :: String -> [String]
-lexer = words  
+lexer = words . map (\c -> if c == ';' then ' ' else c) 
 
 parseAexp :: [String] -> (Aexp, [String])
 parseAexp (op:a1:a2:rest)
@@ -193,20 +193,21 @@ parseBexp (op:a1:a2:rest) = case op of
 
 parseStm :: [String] -> (Stm, [String])
 parseStm (";":rest) = parseStm rest
-parseStm (var:":=":rest) = 
+parseStm (var:":=":rest) =
     let (exp, rest') = parseAexp rest
-        rest'' = dropWhile (/=";") rest'
+        rest'' = if not (null rest') && head rest' == ";" then tail rest' else rest'
     in (Assign var exp, rest'')
 parseStm ("if":rest) = 
     let (bexp, rest1) = parseBexp rest
         (stm1, rest2) = parseStm rest1
-        (stm2, rest3) = parseStm (dropWhile (/="else") rest2)
-    in (If2 bexp stm1 stm2, drop 1 rest3)
+        rest2' = if head rest2 == "else" then tail rest2 else rest2
+        (stm2, rest3) = parseStm rest2'
+    in (If2 bexp stm1 stm2, rest3)
 parseStm ("while":rest) = 
     let (bexp, rest1) = parseBexp rest
         (stm, rest2) = parseStm rest1
     in (While2 bexp stm, rest2)
-
+parseStm rest = error $ "Unrecognized pattern in parseStm: " ++ show rest
 
 parseStatements :: [String] -> ([Stm], [String])
 parseStatements [] = ([], [])
