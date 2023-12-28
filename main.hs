@@ -107,17 +107,59 @@ testAssembler code = (stack2Str stack, state2Str state)
 
 -- TODO: Define the types Aexp, Bexp, Stm and Program
 
+data Aexp = 
+    Const Integer          -- Constant
+    | Var String           -- Variable
+    | Add2 Aexp Aexp        -- Addition
+    | Sub2 Aexp Aexp        -- Subtraction
+    | Mult2 Aexp Aexp       -- Multiplication
+
+data Bexp = 
+    BConst Bool            -- Boolean Constant
+    | Eq2 Aexp Aexp         -- Equality
+    | Le2 Aexp Aexp         -- Less or Equal
+    | And2 Bexp Bexp        -- Logical And
+    | Neg2 Bexp             -- Negation
+
+data Stm = 
+    Assign String Aexp     -- x := a
+    | Seq2 Stm Stm          -- instr1 ; instr2
+    | If2 Bexp Stm Stm      -- if b then s1 else s2
+    | While2 Bexp Stm       -- while b do s
+
 -- compA :: Aexp -> Code
-compA = undefined -- TODO
+compA :: Aexp -> Code
+compA (Const n) = [Push n]
+compA (Var x) = [Fetch x]
+compA (Add a1 a2) = compA a2 ++ compA a1 ++ [Add]
+compA (Sub a1 a2) = compA a2 ++ compA a1 ++ [Sub]
+compA (Mult a1 a2) = compA a2 ++ compA a1 ++ [Mult]
 
 -- compB :: Bexp -> Code
-compB = undefined -- TODO
+compB :: Bexp -> Code
+compB (BoolConst b) = [if b then Tru else Fals]
+compB (Eq a1 a2) = compA a2 ++ compA a1 ++ [Equ]
+compB (Le a1 a2) = compA a2 ++ compA a1 ++ [Le]
+compB (And b1 b2) = compB b2 ++ compB b1 ++ [And]
+compB (Not b) = compB b ++ [Neg]
 
 -- compile :: Program -> Code
-compile = undefined -- TODO
+compile :: [Stm] -> Code
+compile [] = []
+compile (s:ss) = compileStm s ++ compile ss
+
+compileStm :: Stm -> Code
+compileStm (Assign x a) = compA a ++ [Store x]
+compileStm (Seq2 s1 s2) = compileStm s1 ++ compileStm s2
+compileStm (If2 b s1 s2) = compB b ++ [Branch (compileStm s1) (compileStm s2)]
+compileStm (While2 b s) = [Loop (compB b ++ [Neg]) (compileStm s)]
 
 -- parse :: String -> Program
-parse = undefined -- TODO
+parse :: String -> [Stm]
+parse input = 
+  case parseStatements input of
+    Left err -> error (show err)
+    Right stms -> stms
 
 -- To help you test your parser
 testParser :: String -> (String, String)
