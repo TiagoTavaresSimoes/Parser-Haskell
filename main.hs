@@ -147,13 +147,6 @@ compB (Neg2 b)        = compB b ++ [Neg]
 
 -- compile :: Program -> Code
 compileStm :: Stm -> Code
-compileStm (Assign x a)   = compA a ++ [Store x]
-compileStm (Seq2 s1 s2)   = compileStm s1 ++ compileStm s2
-compileStm (If2 b s1 s2)  = compB b ++ [Branch (compileStm s1) (compileStm s2)]
-compileStm (While2 b s)   = [Loop (compB b ++ [Neg]) (compileStm s)]
-
-
-compileStm :: Stm -> Code
 compileStm (Assign x a) = compA a ++ [Store x]
 compileStm (Seq2 s1 s2) = compileStm s1 ++ compileStm s2
 compileStm (If2 b s1 s2) = compB b ++ [Branch (compileStm s1) (compileStm s2)]
