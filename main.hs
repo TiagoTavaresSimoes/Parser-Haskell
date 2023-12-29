@@ -1,5 +1,5 @@
 -- PFL 2023/24 - Haskell practical assignment quickstart
-import Data.Char (isDigit)
+import Data.Char (isDigit,isAlpha, isSpace)
 import Data.List (intercalate, sortBy)
 import Data.Function (on)
 import Data.Ord (comparing)
@@ -82,8 +82,11 @@ run (inst:rest, stack, state) =
                         Just val -> run (rest, val : stack, state)
                         Nothing -> error ("Variable not found: " ++ varName)
     Store varName -> case stack of
-                        (v : xs) -> run (rest, xs, ((varName, v) : state))
-                        [] -> error "Store expects a value on the stack"
+                    (v : xs) -> let newState = if any ((== varName) . fst) state
+                                            then map (\(k, val) -> if k == varName then (k, v) else (k, val)) state
+                                            else (varName, v) : state
+                                in run (rest, xs, newState)
+                    [] -> error "Store expects a value on the stack"
     Noop -> run (rest, stack, state)
     Branch code1 code2 -> case stack of
                               (Right True : xs) -> run (code1 ++ rest, xs, state)
@@ -97,20 +100,6 @@ run (inst:rest, stack, state) =
 testAssembler :: Code -> (String, String)
 testAssembler code = (stack2Str stack, state2Str state)
   where (_,stack,state) = run(code, createEmptyStack, createEmptyState)
-
-main :: IO ()
-main = do
-  putStrLn "Teste 1: "
-  print $ testAssembler [Push 10, Push 4, Push 3, Sub, Mult] == ("-10","")
-  
-  putStrLn "Teste 2: "
-  print $ testAssembler [Fals, Push 3, Tru, Store "var", Store "a", Store "someVar"] == ("","a=3,someVar=False,var=True")
-  
-  putStrLn "Teste 3: "
-  print $ testAssembler [Fals, Store "var", Fetch "var"] == ("False","var=False")
-
-  putStrLn "Teste 4: "
-  print $ testAssembler [Push 1, Push 2, Add] == ("[3]","")
 
 -- Examples:
 -- testAssembler [Push 10,Push 4,Push 3,Sub,Mult] == ("-10","")
@@ -151,9 +140,9 @@ data Stm =
 compA :: Aexp -> Code
 compA (Const n)    = [Push n]
 compA (Var x)      = [Fetch x]
-compA (Add2 a1 a2) = compA a2 ++ compA a1 ++ [Add]
-compA (Sub2 a1 a2) = compA a2 ++ compA a1 ++ [Sub]
-compA (Mult2 a1 a2) = compA a2 ++ compA a1 ++ [Mult]
+compA (Add2 a1 a2) = compA a1 ++ compA a2 ++ [Add]
+compA (Sub2 a1 a2) = compA a1 ++ compA a2 ++ [Sub]
+compA (Mult2 a1 a2) = compA a1 ++ compA a2 ++ [Mult]
 
 
 -- compB :: Bexp -> Code
@@ -180,21 +169,23 @@ compile (stm:stms) = compileStm stm ++ compile stms
 
 -- lexer that splits the input string into tokens
 lexer :: String -> [String]
-lexer = words . map (\c -> if c == ';' then ' ' else c) 
+lexer = words . map (\c -> if c == ';' then ' ' else c)
 
 parseAexp :: [String] -> (Aexp, [String])
+parseAexp (var:"-":n:rest) 
+    | isAlpha (head var) && all isDigit n = (Sub2 (Var var) (Const (read n)), rest)
+parseAexp (n:rest) 
+    | all isDigit n = (Const (read n), rest)  -- Trata números
+    | otherwise     = (Var n, rest)          -- Trata variáveis
 parseAexp (op:a1:a2:rest)
-    | op `elem` ["+", "-", "*"] = 
+    | op `elem` ["+", "-", "*"] =
         let (exp1, rest1) = parseAexp [a1]
             (exp2, rest2) = parseAexp (a2:rest)
         in case op of
             "+" -> (Add2 exp1 exp2, rest2)
             "-" -> (Sub2 exp1 exp2, rest2)
             "*" -> (Mult2 exp1 exp2, rest2)
-parseAexp (n:rest) 
-    | all isDigit n = (Const (read n), rest)  -- Parses an integer constant
-    | otherwise     = (Var n, rest)          -- Parses a variable
-
+    | otherwise = error $ "Unrecognized operator in parseAexp: " ++ op
 
 parseBexp :: [String] -> (Bexp, [String])
 parseBexp ("true":rest)   = (BConst True, rest)
@@ -214,8 +205,7 @@ parseStm :: [String] -> (Stm, [String])
 parseStm (";":rest) = parseStm rest
 parseStm (var:":=":rest) =
     let (exp, rest') = parseAexp rest
-        rest'' = if not (null rest') && head rest' == ";" then tail rest' else rest'
-    in (Assign var exp, rest'')
+    in (Assign var exp, dropWhile (== ";") rest')
 parseStm ("if":rest) = 
     let (bexp, rest1) = parseBexp rest
         (stm1, rest2) = parseStm rest1
@@ -247,6 +237,12 @@ parse input =
 testParser :: String -> (String, String)
 testParser programCode = (stack2Str stack, state2Str state)
   where (_,stack,state) = run(compile (parse programCode), createEmptyStack, createEmptyState)
+
+main :: IO ()
+main = do
+  let (stackResult, stateResult) = testParser "x := 5; x := x - 1;"
+  putStrLn $ show (stackResult, stateResult)
+
 
 -- Examples:
 -- testParser "x := 5; x := x - 1;" == ("","x=4")
