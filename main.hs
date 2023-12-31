@@ -12,7 +12,7 @@ import Debug.Trace
 data Inst =
   Push Integer | Add | Mult | Sub | Tru | Fals | Equ | Le | And | Neg | Fetch String | Store String | Noop |
   Branch Code Code | Loop Code Code
-  deriving Show
+  deriving (Eq, Show)
 type Code = [Inst]
 
 -- define Stack and State types
@@ -250,31 +250,24 @@ parseSimpleBexp tokens = trace ("parseSimpleBexp input: " ++ show tokens) $ case
 
 
 parseStm :: [String] -> (Stm, [String])
-parseStm tokens = trace ("parseStm input: " ++ show tokens) $ case tokens of
-    (";":rest) -> parseStm rest
-
-    (var:":=":rest) ->
-        let (exp, rest') = parseAexp rest
-        in (Assign var exp, dropWhile (== ";") rest')
-
-    ("if":rest) -> 
-        let (bexp, restAfterBexp) = parseBexp rest
-        in trace ("After parsing if condition: " ++ show restAfterBexp) $ case restAfterBexp of
-            ("then":restThen) -> 
-                let (stm1, rest2) = parseStm restThen
-                in trace ("After parsing then block: " ++ show rest2) $ case rest2 of
-                    ("else":restElse) ->
-                        let (stm2, rest3) = parseStm restElse
-                        in (If2 bexp stm1 stm2, rest3)
-                    _ -> error "Expected 'else' after then block"
-            _ -> error "Expected 'then' after if condition"
-
-    ("while":rest) -> 
-        let (bexp, rest1) = parseBexp rest
-            (stm, rest2) = parseStm rest1
-        in (While2 bexp stm, rest2)
-
-    rest -> error $ "Unrecognized pattern in parseStm: " ++ show rest
+parseStm [] = error "No more tokens"
+parseStm (";":rest) = parseStm rest
+parseStm (var:":=":rest) =
+    let (exp, rest') = parseAexp rest
+    in (Assign var exp, dropWhile (== ";") rest')
+parseStm ("if":rest) =
+    let (bexp, restAfterBexp) = parseBexp rest
+    in case span (/= "else") restAfterBexp of
+        (thenPart, "else":elsePart) ->
+            let (thenStm, _) = parseStm thenPart
+                (elseStm, restElse) = parseStm elsePart
+            in (If2 bexp thenStm elseStm, dropWhile (== ";") restElse)
+        _ -> error "Syntax error in if-then-else statement"
+parseStm ("while":rest) =
+    let (bexp, restAfterBexp) = parseBexp rest
+        (stm, rest') = parseStm restAfterBexp
+    in (While2 bexp stm, dropWhile (== ";") rest')
+parseStm l = error $ "Unrecognized statement: " ++ show l
 
 parseStatements :: [String] -> ([Stm], [String])
 parseStatements [] = ([], [])
@@ -296,10 +289,34 @@ testParser :: String -> (String, String)
 testParser programCode = (stack2Str stack, state2Str state)
   where (_,stack,state) = run(compile (parse programCode), createEmptyStack, createEmptyState)
 
+testArithmeticExpression :: Bool
+testArithmeticExpression = 
+    let expected = [Push 5, Push 4, Mult, Push 3, Add]
+        result = compA (Add2 (Const 3) (Mult2 (Const 4) (Const 5)))
+    in expected == result
+
+testBooleanExpression :: Bool
+testBooleanExpression =
+    let expected = [Tru, Push 4, Push 3, Equ, Neg, And]
+        result = compB (And2 (BConst True) (Neg2 (Eq2 (Const 3) (Const 4))))
+    in expected == result
+
+testAssignment :: Bool
+testAssignment =
+    let expected = [Push 4, Push 3, Add, Store "x"]
+        result = compileStm (Assign "x" (Add2 (Const 3) (Const 4)))
+    in expected == result
+
+
+
 main :: IO ()
 main = do
-  let (stackResult, stateResult) = testParser "if (not True and 2 <= 5 = 3 == 4) then x :=1 else y := 2"
-  putStrLn $ show (stackResult, stateResult)
+    putStrLn "Running tests..."
+    putStrLn $ "Test Arithmetic Expression: " ++ show testArithmeticExpression
+    putStrLn $ "Test Boolean Expression: " ++ show testBooleanExpression
+    putStrLn $ "Test Assignment: " ++ show testAssignment
+    let (stackResult, stateResult) = testParser "if (not True and 2 <= 5 = 3 == 4) then x :=1 else y := 2"
+    putStrLn $ "Test Parser Example: " ++ show (stackResult, stateResult)
 
 
 
