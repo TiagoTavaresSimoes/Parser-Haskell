@@ -196,61 +196,85 @@ parseAexp (op:a1:a2:rest)
     | otherwise = error $ "Unrecognized operator in parseAexp: " ++ op
 
 parseBexp :: [String] -> (Bexp, [String])
-parseBexp tokens = trace ("Parsing Bexp: " ++ show tokens) $ case tokens of
-    ("(":rest) -> 
-        let (bexp, ")":rest') = parseBexp rest
-        in trace ("Parsed '(': " ++ show bexp ++ ", rest: " ++ show rest') (bexp, rest')
-    ("true":rest) -> trace "Parsed 'true'" $ (BConst True, rest)
-    ("True":rest) -> trace "Parsed 'True'" $ (BConst True, rest)
-    ("false":rest) -> trace "Parsed 'false'" $ (BConst False, rest)
-    ("False":rest) -> trace "Parsed 'False'" $ (BConst False, rest)
-    ("not":a1:rest) -> 
-        let (bexp1, rest1) = trace "Parsing 'not' expression" $ parseBexp rest
-        in trace ("Parsed 'not': " ++ show bexp1 ++ ", rest: " ++ show rest1) (Neg2 bexp1, rest1)
-    (op:a1:a2:rest)
-        | op == "=" -> 
-            let (bexp1, rest1) = trace ("Parsing left expression of '=': " ++ show a1) $ parseBexp (a1:rest)
-                (bexp2, rest2) = trace ("Parsing right expression of '=': " ++ show a2) $ parseBexp (a2:rest1)
-            in trace ("Comparing expressions: " ++ show bexp1 ++ " and " ++ show bexp2) (BEq bexp1 bexp2, rest2)
-        | otherwise -> case op of
-            "==" -> 
-                let (exp1, rest1) = trace ("Parsing '==' left expression: " ++ show a1) $ parseAexp [a1]
-                    (exp2, rest2) = trace ("Parsing '==' right expression: " ++ show a2) $ parseAexp (a2:rest)
-                in trace ("Parsed '==': " ++ show (Eq2 exp1 exp2) ++ ", rest: " ++ show rest2) (Eq2 exp1 exp2, rest2)
-            "<=" -> 
-                let (exp1, rest1) = trace ("Parsing '<=' left expression: " ++ show a1) $ parseAexp [a1]
-                    (exp2, rest2) = trace ("Parsing '<=' right expression: " ++ show a2) $ parseAexp (a2:rest)
-                in trace ("Parsed '<=': " ++ show (Le2 exp1 exp2) ++ ", rest: " ++ show rest2) (Le2 exp1 exp2, rest2)
-            "and" -> 
-                let (bexp1, rest1) = trace ("Parsing 'and' left expression: " ++ show a1) $ parseBexp [a1]
-                    (bexp2, rest2) = trace ("Parsing 'and' right expression: " ++ show a2) $ parseBexp (a2:rest)
-                in trace ("Parsed 'and': " ++ show (And2 bexp1 bexp2) ++ ", rest: " ++ show rest2) (And2 bexp1 bexp2, rest2)
-            _ -> error $ "Unrecognized boolean operator: " ++ op
-    xs -> error $ "Unrecognized pattern in parseBexp: " ++ show xs
+parseBexp tokens = trace ("parseBexp input: " ++ show tokens) $ 
+    let (bexp1, rest1) = parseSimpleBexp tokens
+    in trace ("parseSimpleBexp output: " ++ show bexp1 ++ ", remaining tokens: " ++ show rest1) $
+       case rest1 of
+            -- Handle logical 'and'
+            ("and":rest2) -> 
+                let (bexp2, rest3) = parseBexp rest2 -- Recursive call for the rest
+                in (And2 bexp1 bexp2, rest3)
 
+            -- Handle boolean equality '='
+            ("=":rest2) -> 
+                let (bexp2, rest3) = parseBexp rest2 -- Recursive call for the rest
+                in (BEq bexp1 bexp2, rest3)
+
+            -- Additional logical operators can be added here
+            _ -> (bexp1, rest1)
+
+            -- Unrecognized patterns
+            xs -> error $ "Unrecognized pattern in parseBexp: " ++ show xs
+
+
+parseSimpleBexp :: [String] -> (Bexp, [String])
+parseSimpleBexp tokens = trace ("parseSimpleBexp input: " ++ show tokens) $ case tokens of
+    -- Handle boolean constants
+    ("true":rest) -> (BConst True, rest)
+    ("True":rest) -> (BConst True, rest)
+    ("false":rest) -> (BConst False, rest)
+    ("False":rest) -> (BConst False, rest)
+
+    -- Handle negation
+    ("not":rest) -> 
+        let (bexp, rest1) = parseSimpleBexp rest
+        in (Neg2 bexp, rest1)
+
+    -- Handle simple comparisons
+    a1:op:a2:rest ->
+        let (exp1, _) = parseAexp [a1]
+            (exp2, rest2) = parseAexp [a2]
+            bexp = case op of
+                "==" -> Eq2 exp1 exp2
+                "<=" -> Le2 exp1 exp2
+                _ -> error $ "Unrecognized operator in parseSimpleBexp: " ++ op
+        in (bexp, rest ++ rest2)  -- Ensure correct handling of remaining tokens
+
+    -- Handle parentheses
+    ("(":rest) -> 
+        let (bexp, ")":rest') = parseSimpleBexp rest
+        in (bexp, rest')
+
+    -- Unrecognized patterns
+    xs -> error $ "Unrecognized pattern in parseSimpleBexp: " ++ show xs
 
 
 parseStm :: [String] -> (Stm, [String])
-parseStm (";":rest) = parseStm rest
-parseStm (var:":=":rest) =
-    let (exp, rest') = parseAexp rest
-    in (Assign var exp, dropWhile (== ";") rest')
-parseStm ("if":rest) = 
-    let (bexp, restAfterBexp) = parseBexp rest
-        restAfterThen = case restAfterBexp of
-            ("then":restThen) -> restThen
+parseStm tokens = trace ("parseStm input: " ++ show tokens) $ case tokens of
+    (";":rest) -> parseStm rest
+
+    (var:":=":rest) ->
+        let (exp, rest') = parseAexp rest
+        in (Assign var exp, dropWhile (== ";") rest')
+
+    ("if":rest) -> 
+        let (bexp, restAfterBexp) = parseBexp rest
+        in trace ("After parsing if condition: " ++ show restAfterBexp) $ case restAfterBexp of
+            ("then":restThen) -> 
+                let (stm1, rest2) = parseStm restThen
+                in trace ("After parsing then block: " ++ show rest2) $ case rest2 of
+                    ("else":restElse) ->
+                        let (stm2, rest3) = parseStm restElse
+                        in (If2 bexp stm1 stm2, rest3)
+                    _ -> error "Expected 'else' after then block"
             _ -> error "Expected 'then' after if condition"
-        (stm1, rest2) = parseStm restAfterThen
-        rest2' = case rest2 of
-            ("else":restElse) -> restElse
-            _ -> error "Expected 'else' after then block"
-        (stm2, rest3) = parseStm rest2'
-    in (If2 bexp stm1 stm2, rest3)
-parseStm ("while":rest) = 
-    let (bexp, rest1) = parseBexp rest
-        (stm, rest2) = parseStm rest1
-    in (While2 bexp stm, rest2)
-parseStm rest = error $ "Unrecognized pattern in parseStm: " ++ show rest
+
+    ("while":rest) -> 
+        let (bexp, rest1) = parseBexp rest
+            (stm, rest2) = parseStm rest1
+        in (While2 bexp stm, rest2)
+
+    rest -> error $ "Unrecognized pattern in parseStm: " ++ show rest
 
 parseStatements :: [String] -> ([Stm], [String])
 parseStatements [] = ([], [])
