@@ -3,8 +3,8 @@
 **T02_G11**
 
 **Team Members:**
-- Diogo Carvalho Pintado (up202108875@fe.up.pt) | Contribution: 60%
-- Tiago Tavares Simões (up202108857@fe.up.pt) | Contribution: 40%
+- Diogo Carvalho Pintado (up202108875@fe.up.pt)
+- Tiago Tavares Simões (up202108857@fe.up.pt)
 
 ## Introduction
 
