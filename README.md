@@ -1,5 +1,7 @@
 # PFL-PROJECT-2
 
+Grade: 17,5
+
 **T02_G11**
 
 **Team Members:**
