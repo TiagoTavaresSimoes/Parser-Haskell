@@ -1,6 +1,6 @@
 # PFL-PROJECT-2
 
-Grade: 17,5
+Grade: 17.5
 
 **T02_G11**
 
